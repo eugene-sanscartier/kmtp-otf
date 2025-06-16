@@ -139,10 +139,12 @@ def main(args_parse):
     # os.environ["TF_NUM_INTEROP_THREADS"] = "16"
     # os.environ["TF_NUM_INTRAOP_THREADS"] = "16"
 
-    args = [potential, training_set, "--save_to={}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
+    args = [potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
     print("running training with args: ", args)
     result = subprocess.run(["mpirun", mlp, "train", *args], text=True)
     if result.returncode == 0:
+        # copy tmp potential
+        os.rename("tmp_{}".format(potential), potential)
         print("Successfully executed trained.")
     else:
         print("Failed to execute train.")
