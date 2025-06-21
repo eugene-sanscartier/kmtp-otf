@@ -100,6 +100,7 @@ def main(args_parse):
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
+    _env = {k: v for k, v in os.environ.items() if not k.startswith("OMPI_")}
 
     preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
 
@@ -115,7 +116,7 @@ def main(args_parse):
 
 
     args = [potential, training_set, extrapolative_candidates, selected_extrapolative]
-    result = subprocess.run(["mpirun", "-n", "1", mlp, "select_add", *args], text=True)
+    result = subprocess.run(["mpirun", "-n", "1", mlp, "select_add", *args], text=True, check=True, env=_env)
     if result.returncode == 0:
         print("Successfully executed select_add.")
     else:
@@ -132,16 +133,9 @@ def main(args_parse):
 
     # "taskset", "-c", "0-7",
     # "numactl", "--cpunodebind=0",
-    # os.environ["OMP_PLACES"] = "cores"
-    # os.environ["OMP_PROC_BIND"] = "close"
-
-    # os.environ["OMP_NUM_THREADS"] = "16"
-    # os.environ["TF_NUM_INTEROP_THREADS"] = "16"
-    # os.environ["TF_NUM_INTRAOP_THREADS"] = "16"
-
     args = [potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
     print("running training with args: ", args)
-    result = subprocess.run(["mpirun", mlp, "train", *args], text=True)
+    result = subprocess.run(["mpirun", mlp, "train", *args], text=True, check=True, env=_env)
     if result.returncode == 0:
         # copy tmp potential
         os.rename("tmp_{}".format(potential), potential)
