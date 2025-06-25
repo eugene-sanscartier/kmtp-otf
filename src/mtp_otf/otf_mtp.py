@@ -49,10 +49,10 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, max_structur
 
     filtred_cfgs = []
     gammas = numpy.array([checkgrade(cfg) for cfg in cfgs])
+    cfgs = [cfgs[i] for i in numpy.where(gammas > gamma_tolerance)[0]]
+
     if numpy.any(gammas < gamma_max):
-        for i, cfg in enumerate(cfgs):
-            if gammas[i] < gamma_max:
-                filtred_cfgs += [cfg]
+        filtred_cfgs = [cfgs[i] for i in numpy.where(gammas < gamma_max)[0]]
     elif numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
         filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
         print("Selected structure with gamma = ", gammas[numpy.argmin(gammas)])
@@ -62,7 +62,8 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, max_structur
             filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
 
     if max_structures > 0 and len(filtred_cfgs) > max_structures:
-        filtered_cfgs = filtered_cfgs[numpy.random.choice(len(filtered_cfgs), size=max_structures, replace=False)]
+        rnd_selected = numpy.random.choice(len(filtered_cfgs), size=max_structures, replace=False)
+        filtered_cfgs = [filtered_cfgs[i] for i in rnd_selected]
 
     with open(preselected_cfg, mode="w") as preselected_file:
         write_cfg(preselected_file, filtred_cfgs)
@@ -104,16 +105,17 @@ def main(args_parse):
 
     preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
 
-    # args = [potential, extrapolative_candidates, extrapolative_candidates + ""]
-    # result = subprocess.run(["mpirun", "-n", "1", mlp, "calculate_grade", *args], text=True)
-    # if result.returncode == 0:
-    #     print("Successfully executed calculate_grade.")
-    # else:
-    #     print("Failed to execute calculate_grade.")
-    #     exit(result.returncode)
+    # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
+    args = [potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
+    result = subprocess.run(["mpirun", "-n", "1", mlp, "calculate_grade", *args], text=True)
+    if result.returncode == 0:
+        os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
+        print("Successfully executed calculate_grade.")
+    else:
+        print("Failed to execute calculate_grade.")
+        exit(result.returncode)
 
     preselected_filter(extrapolative_candidates, gamma_tolerance, gamma_max, max_structures=max_structures, gamma_max0=100000)
-
 
     args = [potential, training_set, extrapolative_candidates, selected_extrapolative]
     result = subprocess.run(["mpirun", "-n", "1", mlp, "select_add", *args], text=True, check=True, env=_env)
@@ -137,8 +139,8 @@ def main(args_parse):
     print("running training with args: ", args)
     result = subprocess.run(["mpirun", mlp, "train", *args], text=True, check=True, env=_env)
     if result.returncode == 0:
-        # copy tmp potential
-        os.rename("tmp_{}".format(potential), potential)
+        # replace potential by tmp potential
+        os.replace("tmp_{}".format(potential), potential)
         print("Successfully executed trained.")
     else:
         print("Failed to execute train.")
