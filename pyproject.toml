@@ -6,13 +6,18 @@ authors = [
 ]
 description = "A package for on-the-fly mtp"
 readme = "README.md"
-requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
+
+requires-python = ">=3.9"
+dependencies = [
+  "ase",
+  "numpy",
+]
 
 [project.urls]
 Homepage = "https://github.com/pypa/sampleproject"
