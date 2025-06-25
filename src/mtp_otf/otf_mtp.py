@@ -87,7 +87,7 @@ def eval_structures(selected_extrapolative, training_set):
 
     return 0
 
-def main(args_parse):
+def main(args_parse, _env):
     potential = args_parse.potential
     training_set = args_parse.training_set
 
@@ -100,8 +100,6 @@ def main(args_parse):
     gamma_max = args_parse.gamma_max
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
-
-    _env = {k: v for k, v in os.environ.items() if not k.startswith("OMPI_")}
 
     preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
 

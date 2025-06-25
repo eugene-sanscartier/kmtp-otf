@@ -1,3 +1,4 @@
+import os
 import argparse
 from .otf_mtp import main
 
@@ -19,5 +20,7 @@ if __name__ == "__main__":
 
     args_parse = parser.parse_args()
 
-    returncode = main(args_parse)
+    _env = {k: v for k, v in os.environ.items() if not k.startswith("OMPI_")}
+
+    returncode = main(args_parse, _env)
     exit(returncode)
