@@ -59,14 +59,25 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
     else:
         print("No structures with gamma < {} found".format(gamma_max0))
         if len(cfgs) > max_extrapolation_lock:
+            print("Warning : No structures with gamma < {} found, max_extrapolation_lock is smaller than {} structures. Selecting conf with gamma minimal gamma = {}".format(gamma_max0, len(cfgs), numpy.min(gammas)))
             filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
         else:
-            with open("extrapolation.lock", mode="r") as lock_file:
-                extrapolation_lock = int(lock_file.read().strip())
-            if extrapolation_lock < max_extrapolation_lock:
-                filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
+            extrapolation_lock = 0
+            if os.path.isfile("extrapolation.lock"):
+                with open("extrapolation.lock", mode="r") as lock_file:
+                    line = lock_file.read().strip()
+                if line != '': extrapolation_lock = int(line)
+                if extrapolation_lock < max_extrapolation_lock:
+                    print("Extreme Warning : No structures with gamma < {} found, but extrapolation_lock = {} < max_extrapolation_lock = {}. Selecting conf with gamma minimal gamma = {}".format(gamma_max0, extrapolation_lock, max_extrapolation_lock, numpy.min(gammas)))
+                    filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
+                else:
+                    print("Extreme Warning : No structures with gamma < {} found and extrapolation_lock = {} >= max_extrapolation_lock = {}. Continuing without selection".format(gamma_max0, extrapolation_lock, max_extrapolation_lock))
             with open("extrapolation.lock", mode="w") as lock_file:
+                print("extrapolation_lock incremented to ", extrapolation_lock + 1)
                 lock_file.write(str(extrapolation_lock + 1))
+            if extrapolation_lock > 99:
+                print("Something is wrong, extrapolation_lock is too high, please check. Breaking exit.")
+                exit(89)
 
     if max_structures > 0 and len(filtred_cfgs) > max_structures:
         rnd_selected = numpy.random.choice(len(filtered_cfgs), size=max_structures, replace=False)
