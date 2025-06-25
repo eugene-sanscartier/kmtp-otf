@@ -28,7 +28,7 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
     with open(extrapolative_candidates_cfg, mode="w") as preselected_file:
         write_cfg(preselected_file, dumps)
 
-def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, max_structures=-1, gamma_max0=100000):
+def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, max_extrapolation_lock, max_structures=-1):
     with open(preselected_cfg, mode="r") as preselected_file:
         cfgs = read_cfg(preselected_file)
 
@@ -58,8 +58,15 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, max_structur
         print("Selected structure with gamma = ", gammas[numpy.argmin(gammas)])
     else:
         print("No structures with gamma < {} found".format(gamma_max0))
-        if len(cfgs) > 1:
+        if len(cfgs) > max_extrapolation_lock:
             filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
+        else:
+            with open("extrapolation.lock", mode="r") as lock_file:
+                extrapolation_lock = int(lock_file.read().strip())
+            if extrapolation_lock < max_extrapolation_lock:
+                filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
+            with open("extrapolation.lock", mode="w") as lock_file:
+                lock_file.write(str(extrapolation_lock + 1))
 
     if max_structures > 0 and len(filtred_cfgs) > max_structures:
         rnd_selected = numpy.random.choice(len(filtered_cfgs), size=max_structures, replace=False)
@@ -96,27 +103,33 @@ def main(args_parse, _env):
     selected_extrapolative = "selected.cfg"
     extrapolation_field = "f_extrapolation_grade"
 
+    preselection_filtering = args_parse.preselection_filtering
     gamma_tolerance = args_parse.gamma_tolerance
     gamma_max = args_parse.gamma_max
+    gamma_max0 = args_parse.gamma_max0
+    max_extrapolation_lock = args_parse.max_extrapolation_lock
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
     preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
 
-    # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
-    args = [potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
-    result = subprocess.run(["mpirun", "-n", "1", mlp, "calculate_grade", *args], text=True)
-    if result.returncode == 0:
-        os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
-        print("Successfully executed calculate_grade.")
-    else:
-        print("Failed to execute calculate_grade.")
-        exit(result.returncode)
+    if preselection_filtering:
+        # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
+        args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
+        print("running calculate_grade with args: ", args)
+        result = subprocess.run([*args], text=True)
+        if result.returncode == 0:
+            os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
+            print("Successfully executed calculate_grade.")
+        else:
+            print("Failed to execute calculate_grade.")
+            exit(result.returncode)
 
-    preselected_filter(extrapolative_candidates, gamma_tolerance, gamma_max, max_structures=max_structures, gamma_max0=100000)
+        preselected_filter(extrapolative_candidates, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
 
-    args = [potential, training_set, extrapolative_candidates, selected_extrapolative]
-    result = subprocess.run(["mpirun", "-n", "1", mlp, "select_add", *args], text=True, check=True, env=_env)
+    args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
+    print("running select_add with args: ", args)
+    result = subprocess.run([*args], text=True, check=True, env=_env)
     if result.returncode == 0:
         print("Successfully executed select_add.")
     else:
@@ -133,9 +146,9 @@ def main(args_parse, _env):
 
     # "taskset", "-c", "0-7",
     # "numactl", "--cpunodebind=0",
-    args = [potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
+    args = ["mpirun", mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
     print("running training with args: ", args)
-    result = subprocess.run(["mpirun", mlp, "train", *args], text=True, check=True, env=_env)
+    result = subprocess.run([*args], text=True, check=True, env=_env)
     if result.returncode == 0:
         # replace potential by tmp potential
         os.replace("tmp_{}".format(potential), potential)

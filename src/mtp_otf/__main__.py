@@ -9,11 +9,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog=None, description="Utility to select structures for training se based on D-optimality criterion")
 
     parser.add_argument("extrapolative_dumps", nargs='+', help=" extrapolative_structures.dump", type=str)
-    parser.add_argument("-p", "--potential", help="input potential YAML file name, will override input file 'potential' section", type=str, default="output_potential.yaml")
-    parser.add_argument("-t", "--training_set", help="Training dataset file name(s), ex.: train.cfg", type=str, default="train.cfg")
+    parser.add_argument("-p", "--potential", help="input potential file name, will override input file 'potential' section", type=str, default="potential.almtp")
+    parser.add_argument("-t", "--training_set", help="Training dataset file name, ex.: train.cfg", type=str, default="train.cfg")
 
+    parser.add_argument("-P", "--preselection_filtering", help="Preselection filtering", type=bool, default=True)
     parser.add_argument("-g", "--gamma_tolerance", help="Gamma tolerance", default=1.010, type=float)
-    parser.add_argument("-G", "--gamma_max", help="Gamma tolerance", default=0, type=float)
+    parser.add_argument("-G", "--gamma_max", help="Gamma max", default=0, type=float)
+    parser.add_argument("-D", "--gamma_max0", help="Gamma max_0", default=100000, type=float)
+    parser.add_argument("-X", "--max_extrapolation_lock", help="Max extrapolation lock", default=5, type=int)
 
     parser.add_argument("-m", "--max_structures", help="Max structures selection", default=-1, type=int)
     parser.add_argument("-l", "--iteration_limit", help="Number of maximum iteration in training algorithm", default=300, type=int)
