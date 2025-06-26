@@ -12,7 +12,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--potential", help="input potential file name, will override input file 'potential' section", type=str, default="potential.almtp")
     parser.add_argument("-t", "--training_set", help="Training dataset file name, ex.: train.cfg", type=str, default="train.cfg")
 
-    parser.add_argument("-P", "--preselection_filtering", help="Preselection filtering", type=bool, default=True)
+    parser.add_argument("-P", "--no_preselection_filtering", help="Preselection filtering", dest='preselection_filtering', action='store_false')
+
     parser.add_argument("-g", "--gamma_tolerance", help="Gamma tolerance", default=1.010, type=float)
     parser.add_argument("-G", "--gamma_max", help="Gamma max", default=0, type=float)
     parser.add_argument("-D", "--gamma_max0", help="Gamma max_0", default=100000, type=float)
