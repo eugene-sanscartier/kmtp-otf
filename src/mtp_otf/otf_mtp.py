@@ -128,7 +128,7 @@ def main(args_parse, _env):
         # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
         args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
         print("running calculate_grade with args: ", args)
-        result = subprocess.run([*args], text=True)
+        result = subprocess.run([*args], text=True, check=True, env=_env)
         if result.returncode == 0:
             os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
             print("Successfully executed calculate_grade.")
