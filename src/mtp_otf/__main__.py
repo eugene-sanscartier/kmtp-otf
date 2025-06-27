@@ -24,7 +24,13 @@ if __name__ == "__main__":
 
     args_parse = parser.parse_args()
 
-    _env = {k: v for k, v in os.environ.items() if not k.startswith("OMPI_")}
 
-    returncode = main(args_parse, _env)
+    # Remove all OMPI_ environment variables to avoid issues with MPI
+    save_env = os.environ.copy()
+    del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_")}
+    print("Removed OMPI_ environment variables: ", del_env)
+
+    returncode = main(args_parse, os.environ)
+
+    os.environ = save_env
     exit(returncode)
