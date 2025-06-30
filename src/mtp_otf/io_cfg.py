@@ -67,7 +67,9 @@ def read_cfg(fileobj):
 
 def write_cfg(fileobj, images, fmt='%12.6f'):
     def map2ranks(arr):
-        rank_map = {val: i for i, val in enumerate(sorted(set(arr)))}
+        types = []
+        _none = [types.append(type) for type in arr if type not in types]
+        rank_map = {val: i for i, val in enumerate(types)}
         return [rank_map[num] for num in arr]
 
     for atoms in images:
