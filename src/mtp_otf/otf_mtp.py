@@ -50,6 +50,7 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
     filtred_cfgs = []
     gammas = numpy.array([checkgrade(cfg) for cfg in cfgs])
     cfgs = [cfgs[i] for i in numpy.where(gammas > gamma_tolerance)[0]]
+    gammas = gammas[numpy.where(gammas > gamma_tolerance)[0]]
 
     if numpy.any(gammas < gamma_max):
         filtred_cfgs = [cfgs[i] for i in numpy.where(gammas < gamma_max)[0]]
