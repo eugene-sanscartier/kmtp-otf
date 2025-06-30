@@ -80,8 +80,8 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
                 exit(89)
 
     if max_structures > 0 and len(filtred_cfgs) > max_structures:
-        rnd_selected = numpy.random.choice(len(filtered_cfgs), size=max_structures, replace=False)
-        filtered_cfgs = [filtered_cfgs[i] for i in rnd_selected]
+        rnd_selected = numpy.random.choice(len(filtred_cfgs), size=max_structures, replace=False)
+        filtred_cfgs = [filtred_cfgs[i] for i in rnd_selected]
 
     with open(preselected_cfg, mode="w") as preselected_file:
         write_cfg(preselected_file, filtred_cfgs)
