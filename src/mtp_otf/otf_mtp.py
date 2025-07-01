@@ -57,7 +57,7 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
     elif numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
         filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
         print("Selected structure with gamma = ", gammas[numpy.argmin(gammas)])
-    else:
+    elif numpy.all(gammas > gamma_max0):
         print("No structures with gamma < {} found".format(gamma_max0))
         if len(cfgs) > max_extrapolation_lock:
             print("Warning : No structures with gamma < {} found, max_extrapolation_lock is smaller than {} structures. Selecting conf with gamma minimal gamma = {}".format(gamma_max0, len(cfgs), numpy.min(gammas)))
@@ -79,6 +79,8 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
             if extrapolation_lock > 99:
                 print("Something is wrong, extrapolation_lock is too high, please check. Breaking exit.")
                 exit(89)
+    else:
+        print("Something is wrong")
 
     if max_structures > 0 and len(filtred_cfgs) > max_structures:
         rnd_selected = numpy.random.choice(len(filtred_cfgs), size=max_structures, replace=False)
