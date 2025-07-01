@@ -52,12 +52,12 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
     cfgs = [cfgs[i] for i in numpy.where(gammas > gamma_tolerance)[0]]
     gammas = gammas[numpy.where(gammas > gamma_tolerance)[0]]
 
-    if numpy.any(gammas < gamma_max):
+    if len(cfgs) > 0 and numpy.any(gammas < gamma_max):
         filtred_cfgs = [cfgs[i] for i in numpy.where(gammas < gamma_max)[0]]
-    elif numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
+    elif len(cfgs) > 0 and numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
         filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
         print("Selected structure with gamma = ", gammas[numpy.argmin(gammas)])
-    elif numpy.all(gammas > gamma_max0):
+    elif len(cfgs) > 0 and numpy.all(gammas > gamma_max0):
         print("No structures with gamma < {} found".format(gamma_max0))
         if len(cfgs) > max_extrapolation_lock:
             print("Warning : No structures with gamma < {} found, max_extrapolation_lock is smaller than {} structures. Selecting conf with gamma minimal gamma = {}".format(gamma_max0, len(cfgs), numpy.min(gammas)))
