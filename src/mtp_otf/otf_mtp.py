@@ -28,9 +28,9 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
     with open(extrapolative_candidates_cfg, mode="w") as preselected_file:
         write_cfg(preselected_file, dumps)
 
-def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, max_extrapolation_lock, max_structures=-1):
-    with open(preselected_cfg, mode="r") as preselected_file:
-        cfgs = read_cfg(preselected_file)
+def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, max_extrapolation_lock, max_structures=-1):
+    # with open(preselected_cfg, mode="r") as preselected_file:
+    #     cfgs = read_cfg(preselected_file)
 
     print("Preselected structures count: ", len(cfgs))
 
@@ -82,14 +82,34 @@ def preselected_filter(preselected_cfg, gamma_tolerance, gamma_max, gamma_max0, 
     else:
         print("Something is wrong")
 
+
+    # with open(preselected_cfg, mode="w") as preselected_file:
+    #     write_cfg(preselected_file, filtred_cfgs)
+
+    print("Post-Preselection filtered structures count: ", len(filtred_cfgs))
+
+    return filtred_cfgs
+
+
+def max_structureselection(filtred_cfgs, max_structures=-1):
+
     if max_structures > 0 and len(filtred_cfgs) > max_structures:
         rnd_selected = numpy.random.choice(len(filtred_cfgs), size=max_structures, replace=False)
         filtred_cfgs = [filtred_cfgs[i] for i in rnd_selected]
+        print("Post-Preselection max-structures count: ", len(filtred_cfgs))
 
-    with open(preselected_cfg, mode="w") as preselected_file:
-        write_cfg(preselected_file, filtred_cfgs)
+    return filtred_cfgs
 
-    print("Filtered structures count: ", len(filtred_cfgs))
+def load_structures(set_name):
+    with open(set_name, mode="r") as set_file:
+        cfgs = read_cfg(set_file)
+    return cfgs
+
+def save_structures(set_name, cfgs):
+    with open(set_name, mode="w") as set_file:
+        write_cfg(set_file, cfgs)
+
+
 
 def eval_structures(selected_extrapolative, training_set):
     with open(selected_extrapolative, mode="r") as selected_file:
@@ -131,7 +151,8 @@ def main(args_parse, _env):
         # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
         args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
         print("running calculate_grade with args: ", args)
-        result = subprocess.run([*args], text=True, check=True, env=_env)
+        with open("mlip_calculate_grade.log", "a") as log_file:
+            result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
         if result.returncode == 0:
             os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
             print("Successfully executed calculate_grade.")
@@ -139,11 +160,19 @@ def main(args_parse, _env):
             print("Failed to execute calculate_grade.")
             exit(result.returncode)
 
-        preselected_filter(extrapolative_candidates, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
+        cfgs = load_structures(extrapolative_candidates)
+        filtred_cfgs = preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
+        save_structures(extrapolative_candidates, filtred_cfgs)
+
+    if max_structures > 0:
+        cfgs = load_structures(extrapolative_candidates)
+        filtred_cfgs = max_structureselection(cfgs, max_structures=max_structures)
+        save_structures(extrapolative_candidates, filtred_cfgs)
 
     args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
     print("running select_add with args: ", args)
-    result = subprocess.run([*args], text=True, check=True, env=_env)
+    with open("mlip_select_add.log", "a") as log_file:
+        result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode == 0:
         print("Successfully executed select_add.")
     else:
@@ -162,11 +191,12 @@ def main(args_parse, _env):
     # "numactl", "--cpunodebind=0",
     args = ["mpirun", mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
     print("running training with args: ", args)
-    result = subprocess.run([*args], text=True, check=True, env=_env)
+    with open("mlip_train.log", "a") as log_file:
+        result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode == 0:
         # replace potential by tmp potential
         os.replace("tmp_{}".format(potential), potential)
-        print("Successfully executed trained.")
+        print("Successfully executed train.")
     else:
         print("Failed to execute train.")
         exit(result.returncode)
