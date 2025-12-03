@@ -9,9 +9,14 @@ import ase.io.lammpsrun
 from .io_cfg import read_cfg, write_cfg
 from evaluator import evaluator
 
+import mpi4py
+import mpi4py.run
+from mpi4py.MPI import COMM_WORLD
+
 mlp = os.environ["OTF_MTP_COMMAND"]
 if mlp == "":
     print("Error OTF_MTP_COMMAND variable not set, set with export OTF_MTP_COMMAND=\"/path/to/mlp\" (in bash) before this script")
+
 
 def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extrapolation_field="f_extrapolation_grade"):
     dumps = []
@@ -27,6 +32,7 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
 
     with open(extrapolative_candidates_cfg, mode="w") as preselected_file:
         write_cfg(preselected_file, dumps)
+
 
 def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, max_extrapolation_lock, max_structures=-1):
     # with open(preselected_cfg, mode="r") as preselected_file:
@@ -82,7 +88,6 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, max_extrapo
     else:
         print("Something is wrong")
 
-
     # with open(preselected_cfg, mode="w") as preselected_file:
     #     write_cfg(preselected_file, filtred_cfgs)
 
@@ -100,15 +105,16 @@ def max_structureselection(filtred_cfgs, max_structures=-1):
 
     return filtred_cfgs
 
+
 def load_structures(set_name):
     with open(set_name, mode="r") as set_file:
         cfgs = read_cfg(set_file)
     return cfgs
 
+
 def save_structures(set_name, cfgs):
     with open(set_name, mode="w") as set_file:
         write_cfg(set_file, cfgs)
-
 
 
 def eval_structures(selected_extrapolative, training_set):
@@ -128,6 +134,7 @@ def eval_structures(selected_extrapolative, training_set):
 
     return 0
 
+
 def main(args_parse, _env):
     potential = args_parse.potential
     training_set = args_parse.training_set
@@ -145,40 +152,52 @@ def main(args_parse, _env):
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
-    preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
+    mpi_rank = COMM_WORLD.rank
 
-    if preselection_filtering:
-        # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
-        args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
-        print("running calculate_grade with args: ", args)
-        with open("mlip_calculate_grade.log", "a") as log_file:
-            result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
+    if mpi_rank == 0:
+        # // Base env related to OMPI_ # Remove all OMPI_ environment variables to avoid issues with MPI
+        # Maybe remove all, since calculate_grade shoud be run in single process mode (without mpirun)
+        dict_safe_env = {"OMPI_MCA_btl": "^openib,ofi", "OMPI_MCA_pml": "^yalla", "OMPI_MCA_mtl": "^ofi", "OMPI_MCA_coll": "^hcoll", "OMPI_MCA_mpi_oversubscribe": "1"}
+        save_env = os.environ.copy()
+        del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_") and k not in dict_safe_env}
+
+        preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
+
+        if preselection_filtering:
+            # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
+            args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
+            print("running calculate_grade with args: ", args)
+            with open("mlip_calculate_grade.log", "a") as log_file:
+                result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
+            if result.returncode == 0:
+                os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
+                print("Successfully executed calculate_grade.")
+            else:
+                print("Failed to execute calculate_grade.")
+                exit(result.returncode)
+
+            cfgs = load_structures(extrapolative_candidates)
+            filtred_cfgs = preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
+            save_structures(extrapolative_candidates, filtred_cfgs)
+
+        if max_structures > 0:
+            cfgs = load_structures(extrapolative_candidates)
+            filtred_cfgs = max_structureselection(cfgs, max_structures=max_structures)
+            save_structures(extrapolative_candidates, filtred_cfgs)
+
+        args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
+        print("running select_add with args: ", args)
+        with open("mlip_select_add.log", "a") as log_file:
+            result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
         if result.returncode == 0:
-            os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
-            print("Successfully executed calculate_grade.")
+            print("Successfully executed select_add.")
         else:
-            print("Failed to execute calculate_grade.")
+            print("Failed to execute select_add.")
             exit(result.returncode)
 
-        cfgs = load_structures(extrapolative_candidates)
-        filtred_cfgs = preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
-        save_structures(extrapolative_candidates, filtred_cfgs)
+        os.environ = save_env
 
-    if max_structures > 0:
-        cfgs = load_structures(extrapolative_candidates)
-        filtred_cfgs = max_structureselection(cfgs, max_structures=max_structures)
-        save_structures(extrapolative_candidates, filtred_cfgs)
-
-    args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
-    print("running select_add with args: ", args)
-    with open("mlip_select_add.log", "a") as log_file:
-        result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
-    if result.returncode == 0:
-        print("Successfully executed select_add.")
-    else:
-        print("Failed to execute select_add.")
-        exit(result.returncode)
-
+    COMM_WORLD.Barrier()
 
     returncode = eval_structures(selected_extrapolative, training_set)
     if returncode == 0:
@@ -187,9 +206,11 @@ def main(args_parse, _env):
         print("Failed to execute eval_structures.")
         exit(returncode)
 
+    COMM_WORLD.Barrier()
+
     # "taskset", "-c", "0-7",
     # "numactl", "--cpunodebind=0",
-    args = ["mpirun", mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
+    args = [mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
     print("running training with args: ", args)
     with open("mlip_train.log", "a") as log_file:
         result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
@@ -201,6 +222,7 @@ def main(args_parse, _env):
         print("Failed to execute train.")
         exit(result.returncode)
 
+    COMM_WORLD.Barrier()
 
     # Active set generation (train update the selection set, so not needed)
     # args = [potential, training_set]
