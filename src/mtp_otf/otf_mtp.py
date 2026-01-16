@@ -9,10 +9,6 @@ import ase.io.lammpsrun
 from .io_cfg import read_cfg, write_cfg
 from evaluator import evaluator
 
-# import mpi4py
-# import mpi4py.run
-# from mpi4py.MPI import COMM_WORLD
-
 mlp = os.environ["OTF_MTP_COMMAND"]
 if mlp == "":
     print("Error OTF_MTP_COMMAND variable not set, set with export OTF_MTP_COMMAND=\"/path/to/mlp\" (in bash) before this script")
@@ -169,20 +165,12 @@ def main(args_parse, _env):
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
-    # mpi_rank = COMM_WORLD.rank
-
-    # if mpi_rank == 0:
-        # // Base env related to OMPI_ # Remove all OMPI_ environment variables to avoid issues with MPI
-        # Maybe remove all, since calculate_grade shoud be run in single process mode (without mpirun)
-        # dict_safe_env = {"OMPI_MCA_btl": "^openib,ofi", "OMPI_MCA_pml": "^yalla", "OMPI_MCA_mtl": "^ofi", "OMPI_MCA_coll": "^hcoll", "OMPI_MCA_mpi_oversubscribe": "1"}
-        # save_env = os.environ.copy()
-        # del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_") and k not in dict_safe_env}
-
     preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
 
     if preselection_filtering:
         # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
-        args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
+        # args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
+        args = f"mpirun -n 1 {mlp} calculate_grade {potential} {extrapolative_candidates} {extrapolative_candidates[:-4] + '.calculate_grade'}".split()
         print("running calculate_grade with args: ", args)
         with open("mlip_calculate_grade.log", "a") as log_file:
             result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
@@ -202,7 +190,8 @@ def main(args_parse, _env):
         filtred_cfgs = max_structureselection(cfgs, max_structures=max_structures)
         save_structures(extrapolative_candidates, filtred_cfgs)
 
-    args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
+    # args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
+    args = f"mpirun -n 1 {mlp} select_add {potential} {training_set} {extrapolative_candidates} {selected_extrapolative}".split()
     print("running select_add with args: ", args)
     with open("mlip_select_add.log", "a") as log_file:
         result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
@@ -211,10 +200,6 @@ def main(args_parse, _env):
     else:
         print("Failed to execute select_add.")
         exit(result.returncode)
-
-        # os.environ = save_env
-
-    # COMM_WORLD.Barrier()
 
     returncode = eval_structures(selected_extrapolative, training_set)
     if returncode == 0:
@@ -227,7 +212,8 @@ def main(args_parse, _env):
 
     # "taskset", "-c", "0-7",
     # "numactl", "--cpunodebind=0",
-    args = ["mpirun", mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
+    # args = ["mpirun", mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
+    args = f"mpirun {mlp} train {potential} {training_set} --save_to=tmp_{potential} --iteration_limit={iteration_limit} --al_mode=nbh".split()
     print("running training with args: ", args)
     with open("mlip_train.log", "a") as log_file:
         result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
@@ -238,8 +224,6 @@ def main(args_parse, _env):
     else:
         print("Failed to execute train.")
         exit(result.returncode)
-
-    # COMM_WORLD.Barrier()
 
     # Active set generation (train update the selection set, so not needed)
     # args = [potential, training_set]
