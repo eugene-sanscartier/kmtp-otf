@@ -2,9 +2,6 @@ import os
 import argparse
 from .otf_mtp import main
 
-# import mpi4py
-# from mpi4py.MPI import COMM_WORLD
-
 if __name__ == "__main__":
     print("Starting main.py")
 
@@ -27,12 +24,29 @@ if __name__ == "__main__":
     args_parse = parser.parse_args()
 
     # // Base env related to OMPI_
-    dict_safe_env = {"OMPI_MCA_btl": "^openib,ofi", "OMPI_MCA_pml": "^yalla", "OMPI_MCA_mtl": "^ofi", "OMPI_MCA_coll": "^hcoll", "OMPI_MCA_mpi_oversubscribe": "1"}
+    SAVE_ENVNAME = [
+        "OMPI_MCA_btl",
+        "OMPI_MCA_pml",
+        "OMPI_MCA_mtl",
+        "OMPI_MCA_coll",
+        "OMPI_MCA_mpi_oversubscribe",
+        "OMPI_MCA_pmix",
+    ]
+
+    DELETE_ENVNAME = [
+        "OMPI_MCA_ess",
+        "OMPI_MCA_ess_base_jobid",
+        "OMPI_UNIVERSE_SIZE",
+    ]
+
 
     # Remove all OMPI_ environment variables to avoid issues with MPI
     save_env = os.environ.copy()
-    del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_") and k not in dict_safe_env}
+
+    # del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_") and k not in SAVE_ENVNAME}
+    del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_") and k in DELETE_ENVNAME}
     # print("Removed OMPI_ environment variables: ", del_env)
+
     returncode = main(args_parse, os.environ)
 
     os.environ = save_env
