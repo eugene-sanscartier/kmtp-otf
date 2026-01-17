@@ -154,6 +154,7 @@ def main(args_parse, _env):
 
     extrapolative_dumps = args_parse.extrapolative_dumps
     extrapolative_candidates = "preselected.cfg"
+    extrapolative_candidates_out = "preselected"
     selected_extrapolative = "selected.cfg"
     extrapolation_field = "f_extrapolation_grade"
 
@@ -169,13 +170,15 @@ def main(args_parse, _env):
 
     if preselection_filtering:
         # failsafe because sometimes lammps extrapolation fix-halt stops lammps before grade calculation
-        # args = ["mpirun", "-n", "1", mlp, "calculate_grade", potential, extrapolative_candidates, extrapolative_candidates[:-4] + ".calculate_grade"]
-        args = f"mpirun -n 1 {mlp} calculate_grade {potential} {extrapolative_candidates} {extrapolative_candidates[:-4] + '.calculate_grade'}".split()
-        print("running calculate_grade with args: ", args)
+        args = f"mpirun -n 1 {mlp} calculate_grade {potential} {extrapolative_candidates} {extrapolative_candidates_out + '.calculate_grade'}".split()
+        print("running calculate_grade with args: ", " ".join(args))
         with open("mlip_calculate_grade.log", "a") as log_file:
             result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
         if result.returncode == 0:
-            os.replace(extrapolative_candidates[:-4] + ".calculate_grade.0", extrapolative_candidates)
+            try:
+                os.replace(extrapolative_candidates_out + '.calculate_grade.0', extrapolative_candidates)
+            except Exception as e:
+                print(f"Error: Could not rename {extrapolative_candidates_out + '.calculate_grade.0'} to {extrapolative_candidates}: {e}")
             print("Successfully executed calculate_grade.")
         else:
             print("Failed to execute calculate_grade.")
@@ -190,9 +193,8 @@ def main(args_parse, _env):
         filtred_cfgs = max_structureselection(cfgs, max_structures=max_structures)
         save_structures(extrapolative_candidates, filtred_cfgs)
 
-    # args = ["mpirun", "-n", "1", mlp, "select_add", potential, training_set, extrapolative_candidates, selected_extrapolative]
     args = f"mpirun -n 1 {mlp} select_add {potential} {training_set} {extrapolative_candidates} {selected_extrapolative}".split()
-    print("running select_add with args: ", args)
+    print("running select_add with args: ", " ".join(args))
     with open("mlip_select_add.log", "a") as log_file:
         result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode == 0:
@@ -212,9 +214,8 @@ def main(args_parse, _env):
 
     # "taskset", "-c", "0-7",
     # "numactl", "--cpunodebind=0",
-    # args = ["mpirun", mlp, "train", potential, training_set, "--save_to=tmp_{}".format(potential), "--iteration_limit=" + str(iteration_limit), "--al_mode=nbh"]
     args = f"mpirun {mlp} train {potential} {training_set} --save_to=tmp_{potential} --iteration_limit={iteration_limit} --al_mode=nbh".split()
-    print("running training with args: ", args)
+    print("running training with args: ", " ".join(args))
     with open("mlip_train.log", "a") as log_file:
         result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode == 0:
