@@ -145,6 +145,13 @@ def eval_structures(selected_extrapolative, training_set):
             print(f"Error evaluating structure {i+1}: {e}")
             print("Warning: Error in eval_structures")
 
+            print("Trying to remove pwscf.save directory")
+            try:
+                import shutil
+                shutil.rmtree("pwscf.save")
+            except Exception as e:
+                print(f"Warning: Could not remove pwscf.save directory: {e}")
+
     return 0
 
 
