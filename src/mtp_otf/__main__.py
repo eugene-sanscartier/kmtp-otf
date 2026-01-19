@@ -50,4 +50,8 @@ if __name__ == "__main__":
     returncode = main(args_parse, os.environ)
 
     os.environ = save_env
-    exit(returncode)
+
+    if returncode != 0:
+        print(f"Program exited with return code: {returncode}")
+        print("Exiting with return code 0.")
+        exit(0)

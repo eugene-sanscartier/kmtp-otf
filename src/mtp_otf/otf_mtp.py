@@ -29,8 +29,8 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
 
         try:
             os.remove(extrapolative_dump)
-        except OSError as e:
-            print(f"Warning: Could not remove {extrapolative_dump}: {e}")
+        except Exception as e:
+            print(f"Warning: {extrapolative_dump}: {e}")
 
     for dump in collected_dumps:
         if dump.has(extrapolation_field): dump.set_array("nbh_grades", dump.get_array(extrapolation_field).flatten())
@@ -38,8 +38,8 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
     try:
         with open(extrapolative_candidates_cfg, mode="w") as preselected_file:
             write_cfg(preselected_file, collected_dumps)
-    except OSError as e:
-        print(f"Error: Could not write to {extrapolative_candidates_cfg}: {e}")
+    except Exception as e:
+        print(f"Error: Exception {extrapolative_candidates_cfg}: {e}")
 
 
 
@@ -181,8 +181,8 @@ def main(args_parse, _env):
                 print(f"Error: Could not rename {extrapolative_candidates_out + '.calculate_grade.0'} to {extrapolative_candidates}: {e}")
             print("Successfully executed calculate_grade.")
         else:
-            print("Failed to execute calculate_grade.")
-            exit(result.returncode)
+            print(f"Failed to execute calculate_grade. Return code: {result.returncode}")
+            # exit(result.returncode)
 
         cfgs = load_structures(extrapolative_candidates)
         filtred_cfgs = preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
@@ -200,15 +200,15 @@ def main(args_parse, _env):
     if result.returncode == 0:
         print("Successfully executed select_add.")
     else:
-        print("Failed to execute select_add.")
-        exit(result.returncode)
+        print(f"Failed to execute select_add. Return code: {result.returncode}")
+        # exit(result.returncode)
 
     returncode = eval_structures(selected_extrapolative, training_set)
     if returncode == 0:
         print("Successfully executed eval_structures.")
     else:
-        print("Failed to execute eval_structures.")
-        exit(returncode)
+        print(f"Failed to execute eval_structures. Return code: {returncode}")
+        # exit(returncode)
 
     # COMM_WORLD.Barrier()
 
@@ -220,11 +220,14 @@ def main(args_parse, _env):
         result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode == 0:
         # replace potential by tmp potential
-        os.replace("tmp_{}".format(potential), potential)
+        try:
+            os.replace("tmp_{}".format(potential), potential)
+        except Exception as e:
+            print(f"Error: Could not rename tmp_{potential} to {potential}: {e}")
         print("Successfully executed train.")
     else:
-        print("Failed to execute train.")
-        exit(result.returncode)
+        print(f"Failed to execute train. Return code: {result.returncode}")
+        # exit(result.returncode)
 
     # Active set generation (train update the selection set, so not needed)
     # args = [potential, training_set]
