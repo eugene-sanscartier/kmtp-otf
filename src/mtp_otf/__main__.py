@@ -3,7 +3,7 @@ import argparse
 from .otf_mtp import main
 
 if __name__ == "__main__":
-    print("Starting main.py")
+    # print("Starting main.py")
 
     parser = argparse.ArgumentParser(prog=None, description="Utility to select structures for training se based on D-optimality criterion")
 
@@ -52,6 +52,7 @@ if __name__ == "__main__":
     os.environ = save_env
 
     if returncode != 0:
-        print(f"Program exited with return code: {returncode}")
+        print(f"One program exited with return code: {returncode}")
         print("Exiting with return code 0.")
-        exit(0)
+
+    exit(0)

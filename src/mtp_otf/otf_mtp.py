@@ -144,9 +144,12 @@ def eval_structures(selected_extrapolative, training_set):
         except Exception as e:
             print(f"Error evaluating structure {i+1}: {e}")
             print("Warning: Error in eval_structures")
-
-            print("Trying to remove pwscf.save directory")
             try:
+                print("Output of espresso.err")
+                with open("espresso.err", mode="r") as err_file:
+                    print(err_file.read())
+
+                print("Trying to remove pwscf.save directory")
                 import shutil
                 shutil.rmtree("pwscf.save")
             except Exception as e:
@@ -173,6 +176,8 @@ def main(args_parse, _env):
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
+    exit_returncode = 0
+
     preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates, extrapolation_field)
 
     if preselection_filtering:
@@ -180,7 +185,7 @@ def main(args_parse, _env):
         args = f"mpirun -n 1 {mlp} calculate_grade {potential} {extrapolative_candidates} {extrapolative_candidates_out + '.calculate_grade'}".split()
         print("running calculate_grade with args: ", " ".join(args))
         with open("mlip_calculate_grade.log", "a") as log_file:
-            result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
+            result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
         if result.returncode == 0:
             try:
                 os.replace(extrapolative_candidates_out + '.calculate_grade.0', extrapolative_candidates)
@@ -189,6 +194,7 @@ def main(args_parse, _env):
             print("Successfully executed calculate_grade.")
         else:
             print(f"Failed to execute calculate_grade. Return code: {result.returncode}")
+            exit_returncode = result.returncode
             # exit(result.returncode)
 
         cfgs = load_structures(extrapolative_candidates)
@@ -203,11 +209,12 @@ def main(args_parse, _env):
     args = f"mpirun -n 1 {mlp} select_add {potential} {training_set} {extrapolative_candidates} {selected_extrapolative}".split()
     print("running select_add with args: ", " ".join(args))
     with open("mlip_select_add.log", "a") as log_file:
-        result = subprocess.run([*args], text=True, check=True, env=os.environ, stdout=log_file, stderr=subprocess.STDOUT)
+        result = subprocess.run([*args], text=True, check=True, env=_env, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode == 0:
         print("Successfully executed select_add.")
     else:
         print(f"Failed to execute select_add. Return code: {result.returncode}")
+        exit_returncode = result.returncode
         # exit(result.returncode)
 
     returncode = eval_structures(selected_extrapolative, training_set)
@@ -215,6 +222,7 @@ def main(args_parse, _env):
         print("Successfully executed eval_structures.")
     else:
         print(f"Failed to execute eval_structures. Return code: {returncode}")
+        exit_returncode = returncode
         # exit(returncode)
 
     # COMM_WORLD.Barrier()
@@ -234,6 +242,7 @@ def main(args_parse, _env):
         print("Successfully executed train.")
     else:
         print(f"Failed to execute train. Return code: {result.returncode}")
+        exit_returncode = result.returncode
         # exit(result.returncode)
 
     # Active set generation (train update the selection set, so not needed)
@@ -245,4 +254,4 @@ def main(args_parse, _env):
     #     print("Failed to execute selection.")
     #     exit(result.returncode)
 
-    # return result.returncode
+    return exit_returncode
