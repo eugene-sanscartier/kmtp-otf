@@ -3,8 +3,6 @@ import argparse
 from .otf_mtp import main
 
 if __name__ == "__main__":
-    # print("Starting main.py")
-
     parser = argparse.ArgumentParser(prog=None, description="Utility to select structures for training se based on D-optimality criterion")
 
     parser.add_argument("extrapolative_dumps", nargs='+', help=" extrapolative_structures.dump", type=str)
@@ -38,7 +36,6 @@ if __name__ == "__main__":
         "OMPI_MCA_ess_base_jobid",
         "OMPI_UNIVERSE_SIZE",
     ]
-
 
     # Remove all OMPI_ environment variables to avoid issues with MPI
     save_env = os.environ.copy()

@@ -42,7 +42,6 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
         print(f"Error: Exception {extrapolative_candidates_cfg}: {e}")
 
 
-
 def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, max_extrapolation_lock, max_structures=-1):
     # with open(preselected_cfg, mode="r") as preselected_file:
     #     cfgs = read_cfg(preselected_file)
