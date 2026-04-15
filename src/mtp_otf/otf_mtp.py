@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 
@@ -12,6 +13,21 @@ from evaluator import evaluator
 mlp = os.environ["OTF_MTP_COMMAND"]
 if mlp == "":
     print("Error OTF_MTP_COMMAND variable not set, set with export OTF_MTP_COMMAND=\"/path/to/mlp\" (in bash) before this script")
+
+
+OTF_STATE_FILE = "otf_state.json"
+
+
+def _load_state():
+    if os.path.isfile(OTF_STATE_FILE):
+        with open(OTF_STATE_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_state(state):
+    with open(OTF_STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
 
 
 def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extrapolation_field="f_extrapolation_grade"):
@@ -42,9 +58,20 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
         print(f"Error: Exception {extrapolative_candidates_cfg}: {e}")
 
 
-def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, max_extrapolation_lock, max_structures=-1):
-    # with open(preselected_cfg, mode="r") as preselected_file:
-    #     cfgs = read_cfg(preselected_file)
+def _update_gamma_max0(state, obs, gamma_max0_floor, gamma_max0_window=5, gamma_max0_percentile=75, gamma_max0_factor=1.2):
+    """Add obs to rolling history, return updated gamma_max0 (never below gamma_max0_floor)."""
+    history = state.get("gamma_max0_history", [])
+    history = (history + [float(obs)])[-gamma_max0_window:]
+    gamma_max0_new = max(gamma_max0_factor * numpy.percentile(history, gamma_max0_percentile), gamma_max0_floor)
+    state["gamma_max0_history"] = history
+    state["gamma_max0"] = gamma_max0_new
+    return gamma_max0_new
+
+
+def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_lock_after_ntimes=10, max_structures=-1):
+
+    state = _load_state()
+    gamma_max0 = state.get("gamma_max0", gamma_max0)
 
     print("Preselected structures count: ", len(cfgs))
 
@@ -68,36 +95,47 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, max_extrapo
 
     if len(cfgs) > 0 and numpy.any(gammas < gamma_max):
         filtred_cfgs = [cfgs[i] for i in numpy.where(gammas < gamma_max)[0]]
-    elif len(cfgs) > 0 and numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
-        filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
-        print("Selected structure with gamma = ", gammas[numpy.argmin(gammas)])
-    elif len(cfgs) > 0 and numpy.all(gammas > gamma_max0):
-        print("No structures with gamma < {} found".format(gamma_max0))
-        if len(cfgs) > max_extrapolation_lock:
-            print("Warning : No structures with gamma < {} found, max_extrapolation_lock is smaller than {} structures. Selecting conf with gamma minimal gamma = {}".format(gamma_max0, len(cfgs), numpy.min(gammas)))
-            filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
-        else:
-            extrapolation_lock = 0
-            if os.path.isfile("extrapolation.lock"):
-                with open("extrapolation.lock", mode="r") as lock_file:
-                    line = lock_file.read().strip()
-                if line != '': extrapolation_lock = int(line)
-                if extrapolation_lock < max_extrapolation_lock:
-                    print("Extreme Warning : No structures with gamma < {} found, but extrapolation_lock = {} < max_extrapolation_lock = {}. Selecting conf with gamma minimal gamma = {}".format(gamma_max0, extrapolation_lock, max_extrapolation_lock, numpy.min(gammas)))
-                    filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
-                else:
-                    print("Extreme Warning : No structures with gamma < {} found and extrapolation_lock = {} >= max_extrapolation_lock = {}. Continuing without selection".format(gamma_max0, extrapolation_lock, max_extrapolation_lock))
-            with open("extrapolation.lock", mode="w") as lock_file:
-                print("extrapolation_lock incremented to ", extrapolation_lock + 1)
-                lock_file.write(str(extrapolation_lock + 1))
-            if extrapolation_lock > 99:
-                print("Something is wrong, extrapolation_lock is too high, please check. Breaking exit.")
-                exit(89)
-    else:
-        print("Something is wrong")
+        if state.get("extreme_allowed", True):
+            state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
+            if state["non_extreme_count"] >= extreme_lock_after_ntimes:
+                state["extreme_allowed"] = False
+        _save_state(state)
 
-    # with open(preselected_cfg, mode="w") as preselected_file:
-    #     write_cfg(preselected_file, filtred_cfgs)
+    elif len(cfgs) > 0 and numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
+        print(f"gamma_max0 = {gamma_max0:.4f} (history length = {len(state.get('gamma_max0_history', []))})")
+
+        selected_gamma = gammas[numpy.argmin(gammas)]
+        filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
+        print("Selected structure with gamma = ", selected_gamma)
+        # Observation is below gamma_max0 → drives threshold down over time.
+        gamma_max0_new = _update_gamma_max0(state, selected_gamma, gamma_max)
+        print(f"Updated gamma_max0: {gamma_max0:.4f} -> {gamma_max0_new:.4f}")
+        if state.get("extreme_allowed", True):
+            state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
+            if state["non_extreme_count"] >= extreme_lock_after_ntimes:
+                state["extreme_allowed"] = False
+        _save_state(state)
+
+    elif len(cfgs) > 0 and numpy.all(gammas > gamma_max0):
+        extreme_allowed = state.get("extreme_allowed", True)
+        non_extreme_count = state.get("non_extreme_count", 0)
+        state["extreme_count"] = state.get("extreme_count", 0) + 1
+        print(f"Extreme Warning: all gammas > gamma_max0={gamma_max0:.4f}. "
+              f"extreme_count={state['extreme_count']}, "
+              f"non_extreme_count={non_extreme_count} (extreme_lock_after_ntimes={extreme_lock_after_ntimes}), "
+              f"extreme_allowed={extreme_allowed}")
+        if extreme_allowed:
+            filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
+            state["non_extreme_count"] = 0
+            print(f"Selecting structure with gamma = {numpy.min(gammas):.4f}")
+        else:
+            print(f"Skipping selection: {non_extreme_count} consecutive non-extreme iterations reached limit of {extreme_lock_after_ntimes}")
+        _save_state(state)
+
+    else:
+        print(f"gamma_max0 = {gamma_max0:.4f} (history length = {len(state.get('gamma_max0_history', []))})")
+        print("Something went wrong.")
+
 
     print("Post-Preselection filtered structures count: ", len(filtred_cfgs))
 
@@ -171,7 +209,7 @@ def main(args_parse, _env):
     gamma_tolerance = args_parse.gamma_tolerance
     gamma_max = args_parse.gamma_max
     gamma_max0 = args_parse.gamma_max0
-    max_extrapolation_lock = args_parse.max_extrapolation_lock
+    extreme_lock_after_ntimes = args_parse.max_extrapolation_lock
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
@@ -197,7 +235,7 @@ def main(args_parse, _env):
             # exit(result.returncode)
 
         cfgs = load_structures(extrapolative_candidates)
-        filtred_cfgs = preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, max_extrapolation_lock=max_extrapolation_lock, max_structures=max_structures)
+        filtred_cfgs = preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0=gamma_max0, extreme_lock_after_ntimes=extreme_lock_after_ntimes, max_structures=max_structures)
         save_structures(extrapolative_candidates, filtred_cfgs)
 
     if max_structures > 0:
