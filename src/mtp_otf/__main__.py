@@ -1,8 +1,9 @@
 import os
 import argparse
-from .otf_mtp import main
+from .otf_mtp import main as _main
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(prog=None, description="Utility to select structures for training se based on D-optimality criterion")
 
     parser.add_argument("extrapolative_dumps", nargs='+', help=" extrapolative_structures.dump", type=str)
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     del_env = {k: os.environ.pop(k) for k, v in os.environ.items() if k.startswith("OMPI_") and k in DELETE_ENVNAME}
     # print("Removed OMPI_ environment variables: ", del_env)
 
-    returncode = main(args_parse, os.environ)
+    returncode = _main(args_parse, os.environ)
 
     os.environ = save_env
 
@@ -53,3 +54,7 @@ if __name__ == "__main__":
         print("Exiting with return code 0.")
 
     exit(0)
+
+
+if __name__ == "__main__":
+    main()

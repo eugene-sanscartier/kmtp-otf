@@ -19,6 +19,10 @@ dependencies = [
   "numpy",
 ]
 
+[project.scripts]
+create-otf-state = "mtp_otf.create_otf_state:main"
+otf-mtp = "mtp_otf.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/pypa/sampleproject"
 Issues = "https://github.com/pypa/sampleproject/issues"
