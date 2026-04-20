@@ -78,15 +78,9 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
     def checkgrade(cfg):
         if "nbh_grades" in cfg.arrays:
             return cfg.arrays["nbh_grades"].max()
-
         if "features" in cfg.info and "MV_grade" in cfg.info["features"]:
-            if "MV_grade" in cfg.info["features"]:
-                if cfg.info["features"]["MV_grade"] < gamma_max0:
-                    return cfg.info["features"]["MV_grade"]
-                else:
-                    return 0
-        else:
-            return 0
+            return cfg.info["features"]["MV_grade"]
+        return 0
 
     filtred_cfgs = []
     gammas = numpy.array([checkgrade(cfg) for cfg in cfgs])
@@ -95,10 +89,10 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
 
     if len(cfgs) > 0 and numpy.any(gammas < gamma_max):
         filtred_cfgs = [cfgs[i] for i in numpy.where(gammas < gamma_max)[0]]
-        if state.get("extreme_allowed", True):
-            state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
-            if state["non_extreme_count"] >= extreme_lock_after_ntimes:
-                state["extreme_allowed"] = False
+        # if state.get("extreme_allowed", True):
+        state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
+        if state["non_extreme_count"] >= extreme_lock_after_ntimes:
+            state["extreme_allowed"] = False
         _save_state(state)
 
     elif len(cfgs) > 0 and numpy.all(gammas > gamma_max) and numpy.any(gammas < gamma_max0):
@@ -110,10 +104,10 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
         # Observation is below gamma_max0 → drives threshold down over time.
         gamma_max0_new = _update_gamma_max0(state, selected_gamma, gamma_max)
         print(f"Updated gamma_max0: {gamma_max0:.4f} -> {gamma_max0_new:.4f}")
-        if state.get("extreme_allowed", True):
-            state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
-            if state["non_extreme_count"] >= extreme_lock_after_ntimes:
-                state["extreme_allowed"] = False
+        # if state.get("extreme_allowed", True):
+        state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
+        if state["non_extreme_count"] >= extreme_lock_after_ntimes:
+            state["extreme_allowed"] = False
         _save_state(state)
 
     elif len(cfgs) > 0 and numpy.all(gammas > gamma_max0):
@@ -209,7 +203,7 @@ def main(args_parse, _env):
     gamma_tolerance = args_parse.gamma_tolerance
     gamma_max = args_parse.gamma_max
     gamma_max0 = args_parse.gamma_max0
-    extreme_lock_after_ntimes = args_parse.max_extrapolation_lock
+    extreme_lock_after_ntimes = args_parse.extreme_lock_after_ntimes
     max_structures = args_parse.max_structures
     iteration_limit = args_parse.iteration_limit
 
