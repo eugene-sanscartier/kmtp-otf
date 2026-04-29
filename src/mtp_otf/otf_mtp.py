@@ -58,11 +58,11 @@ def preselected_dump2cfg(extrapolative_dumps, extrapolative_candidates_cfg, extr
         print(f"Error: Exception {extrapolative_candidates_cfg}: {e}")
 
 
-def _update_gamma_max0(state, obs, gamma_max0_floor, gamma_max0_window=5, gamma_max0_percentile=75, gamma_max0_factor=1.2):
+def _update_gamma_max0(state, obs, gamma_max0_floor, gamma_max0_window=10):
     """Add obs to rolling history, return updated gamma_max0 (never below gamma_max0_floor)."""
     history = state.get("gamma_max0_history", [])
     history = (history + [float(obs)])[-gamma_max0_window:]
-    gamma_max0_new = max(gamma_max0_factor * numpy.percentile(history, gamma_max0_percentile), gamma_max0_floor)
+    gamma_max0_new = max(numpy.mean(history), gamma_max0_floor)
     state["gamma_max0_history"] = history
     state["gamma_max0"] = gamma_max0_new
     return gamma_max0_new
@@ -101,9 +101,6 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
         selected_gamma = gammas[numpy.argmin(gammas)]
         filtred_cfgs = [cfgs[numpy.argmin(gammas)]]
         print("Selected structure with gamma = ", selected_gamma)
-        # Observation is below gamma_max0 → drives threshold down over time.
-        gamma_max0_new = _update_gamma_max0(state, selected_gamma, gamma_max)
-        print(f"Updated gamma_max0: {gamma_max0:.4f} -> {gamma_max0_new:.4f}")
         # if state.get("extreme_allowed", True):
         state["non_extreme_count"] = state.get("non_extreme_count", 0) + 1
         if state["non_extreme_count"] >= extreme_lock_after_ntimes:
@@ -115,7 +112,7 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
         non_extreme_count = state.get("non_extreme_count", 0)
         state["extreme_count"] = state.get("extreme_count", 0) + 1
         print(f"Extreme Warning: all gammas > gamma_max0={gamma_max0:.4f}. "
-              f"extreme_count={state['extreme_count']}, "
+              f"min gamma = {numpy.min(gammas):.4f}, "
               f"non_extreme_count={non_extreme_count} (extreme_lock_after_ntimes={extreme_lock_after_ntimes}), "
               f"extreme_allowed={extreme_allowed}")
         if extreme_allowed:
@@ -130,6 +127,10 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
         print(f"gamma_max0 = {gamma_max0:.4f} (history length = {len(state.get('gamma_max0_history', []))})")
         print("Something went wrong.")
 
+    if len(cfgs) > 0 and numpy.all(gammas > gamma_max) and numpy.any(gammas < 10000):
+        # Observation is below gamma_max0.
+        gamma_max0_new = _update_gamma_max0(state, gammas[numpy.argmin(gammas)], gamma_max)
+        print(f"Updated gamma_max0: {gamma_max0:.4f} -> {gamma_max0_new:.4f}")
 
     print("Post-Preselection filtered structures count: ", len(filtred_cfgs))
 
