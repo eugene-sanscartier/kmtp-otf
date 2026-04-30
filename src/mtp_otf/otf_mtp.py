@@ -130,6 +130,7 @@ def preselected_filter(cfgs, gamma_tolerance, gamma_max, gamma_max0, extreme_loc
     if len(cfgs) > 0 and numpy.all(gammas > gamma_max) and numpy.any(gammas < 10000):
         gamma_max0_new = _update_gamma_max0(state, numpy.min(gammas), gamma_max)
         print(f"Updated gamma_max0: {gamma_max0:.4f} -> {gamma_max0_new:.4f}")
+        _save_state(state)
 
     print("Post-Preselection filtered structures count: ", len(filtred_cfgs))
 
